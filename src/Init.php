@@ -82,8 +82,6 @@ class Init
             return;
         }
 
-        remove_menu_page('wc-admin&path=/payments/overview');
-
         // 白名单：保留为顶级菜单的不动
         $core_keep = [
             'index.php',                             // 仪表盘
@@ -179,21 +177,12 @@ class Init
 
         // 遍历第三方插件：为每个插件在“扩展插件”下面创建一个入口
         foreach ($ext_plugins as $parent_slug => $data) {
-
-            // print_r($data);
-            $submenu_url = $data[ 'url' ];
-            if (strpos($submenu_url, '.php') !== false && substr_count($submenu_url, '.php') >= 2 && strpos($submenu_url, 'admin.php?page=') !== false) {
-                $submenu_url = ($pos = strpos($submenu_url, 'admin.php?page=')) !== false
-                    ? substr_replace($submenu_url, '', $pos, strlen('admin.php?page='))
-                    : $submenu_url;
-            }
-
             add_submenu_page(
                 'wp-third-party-plugins',
                 $data[ 'title' ],
                 $data[ 'title' ],
                 $data[ 'cap' ],
-                $submenu_url // 优先跳到插件首页
+                $data[ 'overview_slug' ] // 优先跳到插件首页
             );
 
             // 移除原来的顶级菜单（仅入口被移除，页面仍然可访问）
@@ -215,7 +204,7 @@ class Init
             $current_page = sanitize_text_field($_GET[ 'page' ]);
         } elseif ( ! empty($_GET[ 'post_type' ])) {
             global $pagenow;
-            $base = isset($pagenow) ? $pagenow : '';
+            $base = $pagenow ?? '';
 
             if ($base === 'edit.php' || $base === 'post-new.php') {
                 $current_page = $base . '?post_type=' . sanitize_text_field($_GET[ 'post_type' ]);
@@ -225,7 +214,7 @@ class Init
         if (empty($current_page)) {
             return;
         }
-        $ext_plugins = isset($GLOBALS[ 'wp_ext_plugins' ]) ? $GLOBALS[ 'wp_ext_plugins' ] : [];
+        $ext_plugins = $GLOBALS[ 'wp_ext_plugins' ] ?? [];
 
         if (empty($ext_plugins)) {
             return;
