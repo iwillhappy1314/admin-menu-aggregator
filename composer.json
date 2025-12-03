@@ -1,0 +1,30 @@
+{
+  "name": "wenprise/bs",
+  "version": "1.0.0",
+  "description": "Plugin developed by wenprise",
+  "require": {
+    "php": ">=7.4",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "AdminMenuAggregator\\": "src/"
+    }
+  },
+  "license": "GPL",
+  "authors": [
+    {
+      "name": "Amos Lee",
+      "email": "iwillhappy1314@gmail.com"
+    }
+  ],
+  "minimum-stability": "stable",
+  "config": {
+    "preferred-install": {
+      "*": "dist"
+    },
+    "allow-plugins": {
+      "composer/installers": true
+    }
+  }
+}
