@@ -4,6 +4,23 @@ namespace AdminMenuAggregator;
 
 class Init
 {
+    private const OPTION_WHITELIST = 'admin_menu_aggregator_whitelist';
+
+    private const DEFAULT_CORE_KEEP = [
+        'index.php',                             // 仪表盘
+        'edit.php',                              // 文章
+        'upload.php',                            // 媒体
+        'edit.php?post_type=page',               // 页面
+        'edit-comments.php',                     // 评论
+        'themes.php',                            // 外观
+        'plugins.php',                           // 插件
+        'users.php',                             // 用户
+        'tools.php',                             // 工具
+        'options-general.php',                   // 设置
+        'woocommerce',                           // WooCommerce
+        'woocommerce-marketing',                 // WooCommerce
+        'ec-hub-dashboard',                      // WooCommerce
+    ];
     /**
      * 存储单例实例
      */
@@ -71,6 +88,9 @@ class Init
          * 仅在进入某个收纳的插件页面时显示
          */
         add_action('in_admin_header', [$this, 'add_sub_menus']);
+
+
+        add_action('admin_init', [$this, 'register_settings']);
     }
 
 
@@ -82,22 +102,10 @@ class Init
             return;
         }
 
+        // print_r($menu);
+
         // 白名单：保留为顶级菜单的不动
-        $core_keep = [
-            'index.php',                             // 仪表盘
-            'edit.php',                              // 文章
-            'upload.php',                            // 媒体
-            'edit.php?post_type=page',               // 页面
-            'edit-comments.php',                     // 评论
-            'themes.php',                            // 外观
-            'plugins.php',                           // 插件
-            'users.php',                             // 用户
-            'tools.php',                             // 工具
-            'options-general.php',                   // 设置
-            'woocommerce',                           // WooCommerce
-            'woocommerce-marketing',                 // WooCommerce
-            'ec-hub-dashboard',                      // WooCommerce
-        ];
+        $core_keep = $this->get_menu_whitelist();
 
         // 是否把 CPT 的顶级菜单也收纳进去（看需求）
         $collect_cpt = false;
@@ -136,6 +144,8 @@ class Init
                 'url'           => menu_page_url($slug, false),
             ];
 
+            // print_r($ext_plugins);
+
             // 同时把该顶级菜单下面的子菜单也记录下来（用于中间导航）
             if ( ! empty($submenu[ $slug ]) && is_array($submenu[ $slug ])) {
                 foreach ($submenu[ $slug ] as $sub_item) {
@@ -148,10 +158,10 @@ class Init
                     ];
                 }
 
-                // 以第一条子菜单作为默认“总览”入口（若存在）
                 $first_sub = $submenu[ $slug ][ 0 ];
+
                 if ( ! empty($first_sub[ 2 ])) {
-                    $ext_plugins[ $slug ][ 'overview_slug' ] = $first_sub[ 2 ];
+                    $ext_plugins[ $slug ][ 'overview_slug' ] = $slug;
                     $ext_plugins[ $slug ][ 'overview_url' ]  = menu_page_url($first_sub[ 2 ], false);
                 }
             }
@@ -170,7 +180,7 @@ class Init
             '扩展',
             'manage_options',
             'wp-third-party-plugins',
-            '__return_null',              // 内容由子菜单页面决定
+            [$this, 'render_main_page'],  // 展示说明和白名单配置
             'dashicons-admin-plugins',
             9999                          // 放到菜单最后
         );
@@ -332,6 +342,10 @@ class Init
                 color: #fff;
                 border-color: #135e96;
             }
+
+            .toplevel_page_kadence-blocks .wp-ext-subnav-wrap{
+                margin: 10px 20px;
+            }
         </style>
 
         <div class="wp-ext-subnav-wrap">
@@ -352,6 +366,99 @@ class Init
                 }
                 ?>
             </div>
+        </div>
+        <?php
+    }
+
+
+    public function register_settings()
+    {
+        register_setting(
+            'admin_menu_aggregator',
+            self::OPTION_WHITELIST,
+            [
+                'type'              => 'array',
+                'default'           => [],
+                'sanitize_callback' => [$this, 'sanitize_whitelist'],
+            ]
+        );
+    }
+
+
+    private function get_menu_whitelist(): array
+    {
+        $option = get_option(self::OPTION_WHITELIST, []);
+
+        if ( ! is_array($option)) {
+            $option = [];
+        }
+
+        $option = array_filter(array_map('sanitize_text_field', array_map('trim', $option)));
+
+        return array_values(array_unique(array_merge(self::DEFAULT_CORE_KEEP, $option)));
+    }
+
+
+    public function sanitize_whitelist($input): array
+    {
+        if (is_string($input)) {
+            $input = preg_split('/[\r\n,]+/', $input);
+        }
+
+        if ( ! is_array($input)) {
+            return [];
+        }
+
+        $sanitized = [];
+
+        foreach ($input as $item) {
+            $slug = sanitize_text_field(trim($item));
+
+            if ($slug !== '') {
+                $sanitized[] = $slug;
+            }
+        }
+
+        return array_values(array_unique($sanitized));
+    }
+
+
+    public function render_main_page()
+    {
+        if ( ! current_user_can('manage_options')) {
+            return;
+        }
+
+        $whitelist      = get_option(self::OPTION_WHITELIST, []);
+        $whitelist_text = '';
+
+        if (is_array($whitelist)) {
+            $whitelist_text = implode("\n", $whitelist);
+        }
+
+        $default_text = implode('、', self::DEFAULT_CORE_KEEP);
+        ?>
+        <div class="wrap">
+            <h1>扩展插件</h1>
+
+            <p>该插件会扫描后台左侧菜单，将除核心菜单以外的第三方顶级菜单统一收纳到“扩展”下，并在浏览这些插件页面时自动生成位于内容区域上方的二级导航，方便跳转插件内部的子菜单页面。</p>
+
+            <h2>工作原理</h2>
+            <ol>
+                <li>在 <code>admin_menu</code> 钩子中遍历 <code>$menu</code> / <code>$submenu</code>，记录所有第三方顶级菜单。</li>
+                <li>为每个被收纳的插件在“扩展”下创建一个子菜单入口，并移除其原有的顶级菜单。</li>
+                <li>进入被收纳插件的任意页面时，在 <code>in_admin_header</code> 钩子里渲染该插件的子菜单导航。</li>
+            </ol>
+
+            <h2>白名单设置</h2>
+            <p>默认保留的顶级菜单：<?php echo esc_html($default_text); ?>。</p>
+            <p>如需额外保留某些插件的顶级菜单，在下方输入它们的菜单 slug（每行或用逗号分隔一个）。保存后会与默认白名单合并，不会被收纳到“扩展”下。</p>
+
+            <form method="post" action="options.php">
+                <?php settings_fields('admin_menu_aggregator'); ?>
+                <textarea name="<?php echo esc_attr(self::OPTION_WHITELIST); ?>" rows="8" class="large-text code" placeholder="例如：woocommerce, rank-math"><?php echo esc_textarea($whitelist_text); ?></textarea>
+                <?php submit_button('保存白名单'); ?>
+            </form>
         </div>
         <?php
     }
